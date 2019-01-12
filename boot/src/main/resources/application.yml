@@ -1,0 +1,14 @@
+
+persion:
+    name: wangqian
+    age: 18
+    weight: 125
+    boss: false
+    birth: 2018/5/5
+    maps: {k1: v1,k2: v2}
+    list:
+      - wangli
+      - wangbai
+    dog:
+      name: xiaogou
+      age: 2
