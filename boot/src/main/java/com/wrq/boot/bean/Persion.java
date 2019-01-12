@@ -1,7 +1,9 @@
 package com.wrq.boot.bean;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.PropertySource;
 import org.springframework.stereotype.Component;
+import org.springframework.validation.annotation.Validated;
 
 import java.util.Date;
 import java.util.List;
@@ -21,6 +23,7 @@ import java.util.Map;
  *
  */
 @Component
+@PropertySource(value = {"classpath:persion.properties"})
 @ConfigurationProperties(prefix = "persion")
 public class Persion {
 
