@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+SUCCESS.HTML
+<div th:text="${Hello}">模板引擎获取不到值</div>
+<div id="id01" class="myDiv" th:id="${hello}" th:text="${hello}"></div>
+<hr/>
+<div th:text="${hello}"></div>
+<div th:utext="${hello}"></div>
+<hr/>
+<h4 th:text="${user}" th:each="user:${users}"></h4>
+<hr/>
+<span th:each="user:${users}">[[${user}]]</span>
+</body>
+</html>
