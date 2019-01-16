@@ -1792,6 +1792,205 @@ public class MyErrorAttributes  extends DefaultErrorAttributes{
 
 自定义一个异常拦截器，拦截指定异常后把自定义的信息放在request中，这时候在重定向 /error ，然后通过BasicErrorController进行两种响应，紧接着通过DefaultErrorAttributes进行处理，他有一个方法getErrorAttributes，这个方法返回的map就是页面和Json能获取的所有字段。所有我们自定义DefaultErrorAttributes，来获取request中放的数据，放到map中返回。
 
+## 五、嵌入式Servlet容器
+
+没有使用Spring Boot开发时，部署需要安装tomcat环境，项目打成war包后进行部署。而Spring Boot默认的使用tomcat作为嵌入的Servlet容器。
+
+
+#### 1. 修改Servlet容器配置
+
+之前开发的时候如果想修改tomcat的配置，只需要找到配置文件修改即可。现在时嵌入式的Servlet容器，我们如何修改配置，有两种方式：
+
+1) 在application.properties配置文件中进行配置，server相关配置与ServerProperties类绑定
+```
+#通用的servlet配置
+server.port=8081
+server.context-path=/crud
+
+#tomcat的设置
+servlet.tomcat.xxx
+```
+2) 编写一个嵌入式的Servlet容器的定制器：EmbeddedServletContainerCustomizer
+
+```
+package com.wrq.boot.config;
+@Configuration
+public class ConfigController extends WebMvcConfigurerAdapter {
+    /**
+     * 通过下面的bean实现自定义嵌入式容器配置
+     * @return
+     */
+    @Bean EmbeddedServletContainerCustomizer embeddedServletContainerCustomizer() {
+        return new EmbeddedServletContainerCustomizer() {
+            @Override
+            public void customize(ConfigurableEmbeddedServletContainer container) {
+                container.setPort(8086);
+            }
+        };
+    }
+
+}
+```
+
+#### 2. 注册三大组件：Servlet、Filter、Listener
+
+由于Spring Boot默认是Jar包的方式启动嵌入式的Servlet容器来启动Spring Boot的应用，没有web.xml.
+
+对三大组件使用下面的方式
+
+- ServletRegistrationBean
+
+```
+@Configuration
+public class MyConfigController {
+    @Bean
+    public ServletRegistrationBean testServlet() {
+        // 访问 /servlet 的时候就会调用 TestServlet
+        ServletRegistrationBean servletRegistrationBean = new ServletRegistrationBean(new TestServlet(), "/servlet");
+        return servletRegistrationBean;
+    }
+}
+```
+
+- FilterRegistrationBean
+```
+ @Bean
+public FilterRegistrationBean filterRegistrationBean () {
+    FilterRegistrationBean filterRegistrationBean = new FilterRegistrationBean();
+    filterRegistrationBean.setFilter(new TestFilter());
+    filterRegistrationBean.setUrlPatterns(Arrays.asList("/helloMan","/filter"));
+    return filterRegistrationBean;
+}
+```
+- ServletListenerRegistrationBean
+
+```
+@Bean 
+public ServletListenerRegistrationBean myListener(){     
+ServletListenerRegistrationBean<MyListener> registrationBean =  new  ServletListenerRegistrationBean<>(new MyListener());    
+return  registrationBean; 
+}
+```
+SpringBoot帮我们自动配置的SpringMVC的时候，自动的注册SpringMVC的前端控制器,DIspatcherServlet:
+
+```
+@Bean(name = DEFAULT_DISPATCHER_SERVLET_REGISTRATION_BEAN_NAME)
+@ConditionalOnBean(value = DispatcherServlet.class, name = DEFAULT_DISPATCHER_SERVLET_BEAN_NAME)
+public ServletRegistrationBean dispatcherServletRegistration(
+		DispatcherServlet dispatcherServlet) {
+	ServletRegistrationBean registration = new ServletRegistrationBean(
+			dispatcherServlet, this.serverProperties.getServletMapping());
+// 默认拦截：/ 所有请求；包静态资源，但是不拦截jsp请求 /*会拦截jsp 
+//可以通过server.servletPath来修改SpringMVC前端控制器默认拦截的请求路径 
+	registration.setName(DEFAULT_DISPATCHER_SERVLET_BEAN_NAME);
+	registration.setLoadOnStartup(
+			this.webMvcProperties.getServlet().getLoadOnStartup());
+	if (this.multipartConfig != null) {
+		registration.setMultipartConfig(this.multipartConfig);
+	}
+	return registration;
+}
+```
+
+
+#### 3. 切换Servlet容器
+
+Spring Boot默认支持的时tomcat服务器，但是它支不支持其他的Servlet容器呢？
+
+- tomcat 默认容器配置
+- Jetty 长连接，适合聊天应用
+- Undertow 适合高并发，不支持JSP
+
+Spring Boot默认tomcat作为容器是因为:web模块的start的依赖是tomcat的：
+
+
+```
+graph LR
+spring-boot-starter-web-->sping-boot-starter-tomcat
+sping-boot-starter-tomcat-->tomcat-embed-core
+tomcat-embed-core-->tomcat-annotations-api
+sping-boot-starter-tomcat-->tomcat-embed-el
+sping-boot-starter-tomcat-->tomcat-embed-el-websocket
+```
+修改容器为：Jetty
+```
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-web</artifactId>
+<exclusions>
+	<exclusion>
+		<artifactId>spring-boot-starter-tomcat</artifactId>
+		<groupId>org.springframework.boot</groupId>
+	</exclusion>
+</exclusions>
+</dependency>
+
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-jetty</artifactId>
+</dependency>
+```
+修改容器为：Undertow
+
+```
+<dependency>
+<groupId>org.springframework.boot</groupId>
+<artifactId>spring-boot-starter-web</artifactId>
+<exclusions>
+	<exclusion>
+		<artifactId>spring-boot-starter-tomcat</artifactId>
+		<groupId>org.springframework.boot</groupId>
+	</exclusion>
+</exclusions>
+</dependency>
+
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-undertow</artifactId>
+</dependency>
+```
+#### 4. 自动配置原理以及启动原理
+
+[视频教程](https://www.bilibili.com/video/av39001751/?p=48)
+
+#### 5. 使用外部的Servlet容器
+
+嵌入式Servlet容器优点:
+
+- 应用打成可执行的jar
+- 简单
+- 便携
+
+嵌入式Servlet容器缺点:
+- 默认不支持JSP
+- 优化定制比较复杂
+
+1. 创建一个War包的项目
+2. 自己创建webapp和web.xml页面
+3. 将嵌入式的Tomcat指定为provided
+
+```
+<!-- 意思是已经提供了tomcat的环境，打包不需要携带 -->
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-tomcat</artifactId>
+	<scope>provided</scope>
+</dependency>
+```
+4. 必须编写一个SpringBootServletInitializer的子类，并调用conﬁgure方法
+```
+public class ServletInitializer extends SpringBootServletInitializer {
+	@Override
+	protected SpringApplicationBuilder configure(SpringApplicationBuilder application) {
+		return application.sources(BootExternalContainerApplication.class);
+	}
+}
+```
+5. 启动服务器就可以使用
+
+#### 6. 外部容器的相关原理
+
+[视频教程](https://www.bilibili.com/video/av39001751/?p=52)
 
 
 
