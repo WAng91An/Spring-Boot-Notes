@@ -7,7 +7,7 @@ import org.springframework.web.context.request.RequestAttributes;
 import java.util.Map;
 
 /**
- * Created by wangqian on 2019/1/16.
+ * Created by wangqian on 2019/1/16
  */
 //给容器中加入我们自定义的ErrorAttributes
 @Component
