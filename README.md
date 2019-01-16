@@ -2,7 +2,7 @@
 Spring Boot 学习记录
 
 ## 一、Hello World
-#### 起步
+#### 1. 起步
 1. 点击[此链接](https://spring.io/projects/spring-boot)点击Quick start，选择对应版本，下载Demo。
 2. IDEA导入项目
 3. 建立controller包，以及类
@@ -108,7 +108,7 @@ public class HelloController {
     }
 }
 ```
-#### 注解区别？
+#### 2. 注解区别？
 @Controller和@RestController的区别
 
 @RestController注解相当于@ResponseBody ＋ @Controller合在一起的作用。
@@ -126,7 +126,8 @@ public class HelloController {
 - 相当于@Controller+@ResponseBody两个注解的结合。
 - 返回json数据不需要在方法前面加@ResponseBody注解了
 - 使用@RestController这个注解，就不能返回jsp,html页面，视图解析器无法解析jsp,html页面
-#### 依赖讲解 
+
+#### 3. 依赖讲解 
 
 1. 父项目（版本仲裁）
 ```
@@ -734,7 +735,7 @@ java -jar boot-config-position-xxxxxx.jar --spring.config.location=D:/applicatio
 ```
 这样即使项目上线了，我们也可以通过修改本地的配置文件，使用一行命令即可，极大方便了运维人员。
 
-### 5. 外部配置加载顺序
+### 6. 外部配置加载顺序
 
 Spring Boot 支持多种外部配置方式
 
@@ -758,7 +759,7 @@ java -jar boot-config-position-xxxxxx.jar --server.port // 多个配置用空格
 
 注意：从jar包外向jar包内寻找，优先加载profile最后加载不带profile，更多参考[官方文档](https://docs.spring.io/spring-boot/docs/1.5.19.BUILD-SNAPSHOT/reference/htmlsingle/)
 
-### 6. 自动配置原理
+### 7. 自动配置原理
 GitHub对应项目：boot-config-autoconfig
 1. 配置文件写什么？
 - 配置文件可配置属性[查阅](https://docs.spring.io/spring-boot/docs/1.5.19.RELEASE/reference/htmlsingle/#common-application-properties)
@@ -886,15 +887,15 @@ SLF4j是一个抽象层，实现层选用什么都可以，我们此处选用Log
 基本依赖：
 ```
 <dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter</artifactId>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter</artifactId>
 </dependency>
 ```
 Spring Boot使用下方依赖做日志功能
 ```
 <dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-logging</artifactId>
+  <groupId>org.springframework.boot</groupId>
+  <artifactId>spring-boot-starter-logging</artifactId>
 </dependency>
 ```
 我们观察日志依赖的关系图：
@@ -918,14 +919,14 @@ jcl-over-slf4j-->slf4j-api
 
 ```
 <dependency>
-			<groupId>org.springframework</groupId>
-			<artifactId>spring-core</artifactId>
-			<exclusions>
-			    <exclusion>
-                  <groupId>commons-logging</groupId>
-                  <artifactId>commons-logging</artifactId>
-			    </exclusion>
-			</exclusions>
+  <groupId>org.springframework</groupId>
+    <artifactId>spring-core</artifactId>
+	  <exclusions>
+	    <exclusion>
+          <groupId>commons-logging</groupId>
+          <artifactId>commons-logging</artifactId>
+		</exclusion>
+	  </exclusions>
 </dependency>
 ```
 ### 4. 日志使用
@@ -1063,6 +1064,738 @@ Logback | logging.properties
 根据此图进行移除包和导入包即可，可以通过IDEA的依赖图方便的移除依赖。
 
 ![日志统一处理](https://www.slf4j.org/images/legacy.png)
+
+## 四、Web实战
+#### 1. 创建项目
+##### 步骤
+1. 创建Spring Boot项目
+2. 导入相关的模块，比如Web模块
+3. 编写自己的业务逻辑
+##### 思考
+当我们每使用一个场景的时候需要思考Sping Boot帮我们配置了什么，我们可以不可修改，能修改哪些配置？
+
+在org.springframework.boot.autoconfig的Jar里面都是自动配置的组件。
+
+XXXAutoConfiguration: 帮我们给容器中自动配置组件
+
+XXXProperties：配置类来封装配置文件的内容
+
+#### 2. 静态资源映射规则
+##### 1) 第一种规则
+由于我们把Web项目最后会打成Jar包，发布线上。引入Bootstrap，jQuery等静态资源文件就不能放在Webapp文件夹下(也没有Webapp文件夹)，我们必须通过把静态资源打成Jar包，添加至pom.xml，依赖查找移步[WebJars官网](https://www.webjars.org/)，WebJars：使用Jar包的方式引入静态资源。
+
+查看自动配置的Jar，Web模块中的WebMvcAutoConfiguration类的源码：
+
+```
+public void addResourceHandlers(ResourceHandlerRegistry registry) {
+    if(!this.resourceProperties.isAddMappings()) {
+        logger.debug("Default resource handling disabled");
+    } else {
+        Integer cachePeriod = this.resourceProperties.getCachePeriod();
+        if(!registry.hasMappingForPattern("/webjars/**")) {
+            this.customizeResourceHandlerRegistration(registry.addResourceHandler(new String[]{"/webjars/**"}).addResourceLocations(new String[]{"classpath:/META-INF/resources/webjars/"}).setCachePeriod(cachePeriod));
+        }
+
+        String staticPathPattern = this.mvcProperties.getStaticPathPattern();
+        if(!registry.hasMappingForPattern(staticPathPattern)) {
+            this.customizeResourceHandlerRegistration(registry.addResourceHandler(new String[]{staticPathPattern}).addResourceLocations(this.resourceProperties.getStaticLocations()).setCachePeriod(cachePeriod));
+        }
+    }
+ }
+```
+上方部分源码表明：所有的 /webjars/** 映射请求都会去 classpath:/META-INF/resources/webjars/ 路径下去找资源。
+
+如：引入jQuery资源文件
+1. 登陆[WebJars官网](https://www.webjars.org/)，复制依赖：
+
+```
+<dependency>
+    <groupId>org.webjars</groupId>
+    <artifactId>jquery</artifactId>
+    <version>2.1.1</version>
+</dependency>
+```
+2. 导入后，查看org.webjars:jquery的目录文件：
+
+```
+org.webjars:jquery:2.1.1
+ ->jquery-2.1.1.jar
+   ->META-INF
+   ->maven
+   ->resources
+     ->webjars
+       ->jquery
+         ->2.1.1
+           ->jquery.js
+           ->jquery.min.js
+```
+
+3. 对应上方映射规则访问：localhost:8080/webjars/jquery/2.1.1/jquery.js，访问后显示jquery.js的源码。
+
+4. 故使用webjars的方式只需要引入依赖配置，访问时写webjars下面的资源名称即可。
+
+##### 2) 第二种规则
+
+访问当前项目的任何资源的时候，他回去一些文件夹下寻找：
+
+- classpath: /META-INF/resources/
+- classpath: /resources/ ( 这是resources文件夹下面的resources文件夹)
+- classpath: /static/
+- classpath: /public/
+- / 当前项目根路径
+
+localhost:8080/adc/abc.js ---> 去上面资源文件夹中去找/abc/abc.js
+
+
+##### 3) 第三种规则
+
+第三种规则是欢迎页的是设置，欢迎页：静态资源文件夹下所有的index.html页面。
+
+localhost:8080/  ---> 去资源文件夹找找index.html
+
+##### 4) 第四种规则
+
+第四种规则是网站图标。
+
+所有的 **/favicon.ico 都是在资源文件夹下找。
+
+##### 5) 自定义静态文件夹路径
+Spring Boot默认配置是在类路径下的resources、public、static文件夹为静态资源文件夹。我们通过下方配置修改路径：
+```
+spring.resources.static.locations=classpath:/hell,classpath:/wrq/
+```
+#### 3. 模板引擎
+##### 1) 常见的模板引擎
+JSP、Velocity、Freemarker、Thymeleaf
+
+Spring Boot推荐使用Thymeleaf，语法简单、强大。
+
+模板引擎的作用：把数据和静态模板进行绑定，生成我们想要的HTML。
+
+![模板引擎](https://pic004.cnblogs.com/news/201204/20120423_115044_2.jpg)
+
+##### 2) 使用模板引擎
+1. 引入依赖
+
+```
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-thymeleaf</artifactId>
+</dependency>
+```
+2. 默认版本为Thymeleaf 2，如果想使用Thymeleaf 3，移步[官网](https://docs.spring.io/spring-boot/docs/1.5.19.BUILD-SNAPSHOT/reference/htmlsingle/#howto-use-thymeleaf-3)，添加配置。
+
+```
+<properties>
+    <thymeleaf.version>3.0.2.RELEASE</thymeleaf.version>
+    <thymeleaf-layout-dialect.version>2.1.1</thymeleaf-layout-dialect.version>
+</properties>
+```
+
+#### 4. Thymeleaf使用
+打开Spring Boot的关于自动配置的Jar，找到Thymeleaf相关的文件夹，有一个类：ThymeleafProperties:
+
+```
+@ConfigurationProperties(prefix = "spring.thymeleaf")
+public class ThymeleafProperties {
+	private static final Charset DEFAULT_ENCODING = Charset.forName("UTF-8");
+	private static final MimeType DEFAULT_CONTENT_TYPE = MimeType.valueOf("text/html");
+	public static final String DEFAULT_PREFIX = "classpath:/templates/";
+	public static final String DEFAULT_SUFFIX = ".html";
+	
+	// 只需要把HTML放在classpath:/templates/，Thymeleaf就会自动解析渲染
+```
+例如：
+
+```
+package com.wrq.boot.controller;
+
+@Controller
+public class HelloController {
+    // 此处并没有@ResponseBody注解
+    @RequestMapping("/success")
+    public String hello () {
+        return "success";
+    }
+}
+```
+访问http://localhost:8080/success 就会打开 resources/templates/success.html文件，这是由thymeleaf完成的。
+
+简单使用：
+1. 导入thymeleaf的命名空间，以获得更好的提示。
+
+```
+<html xmlns:th="http://www.thymeleaf.org">
+```
+2. 使用thymeleaf
+
+- 编写controller
+```
+package com.wrq.boot.controller;
+
+@Controller
+public class HelloController {
+    @RequestMapping("/success")
+    public String hello (Map<String ,Object> map) {
+        map.put("Hello","World"); // 传递过去一个值
+        return "success";
+    }
+}
+```
+- success.html
+
+```
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<div th:text="${Hello}">模板引擎获取不到值</div>
+</body>
+</html>
+```
+- 请求 localhost:8080/success 会打印 World
+
+#### 5. Thymeleaf语法
+
+[常用的语法实例-中文版](https://www.cnblogs.com/vinphy/p/4674247.html)
+
+1) 语法由、片段包含、遍历、条件判断、声明变量等等
+- [thymeleaf语法官方文档](https://www.thymeleaf.org/doc/tutorials/3.0/usingthymeleaf.html#attribute-precedence)
+2) 表达式
+- [表达式语法](https://www.thymeleaf.org/doc/tutorials/3.0/usingthymeleaf.html#standard-expression-syntax)
+
+#### 6. Sping MVC自动配置
+
+Spring Boot 自动配置好了SpringMVC，更详细移步 [Web开发相关文档](https://docs.spring.io/spring-boot/docs/1.5.19.BUILD-SNAPSHOT/reference/htmlsingle/#boot-features-developing-web-applications)
+
+以下是SpringBoot对SpringMVC的默认配置:（WebMvcAutoConﬁguration）
+
+- Inclusion of ContentNegotiatingViewResolver and BeanNameViewResolver beans. 
+    - 自动配置了ViewResolver（视图解析器：根据方法的返回值得到视图对象（View），视图对象决定如何 渲染）） 
+    - ContentNegotiatingViewResolver：组合所有的视图解析器的
+    - 如何定制：我们可以自己给容器中添加一个视图解析器；自动的将其组合进来
+- Support for serving static resources, including support for WebJars.静态资源文件夹路 径,webjars 
+- Static index.html support. 静态首页访问 
+- Custom Favicon support. 网站图标
+- 自动注册了 of Converter , GenericConverter , Formatter beans. 
+    - Converter：转换器，  public String hello(User user)接受前端是文本，转化成Inteager等类型..
+    - Converter Formatter  格式化器，2017.12.17===Date
+    - 自己添加的格式化器转换器，我们只需要放在容器中即可
+- Support for HttpMessageConverters.
+    - HttpMessageConverter：SpringMVC用来转换Http请求和响应的,User---Json.
+    - HttpMessageConverters 是从容器中确定,获取所有的HttpMessageConverter
+    - 自己给容器中添加HttpMessageConverter，只需要将自己的组件注册容器中 （@Bean,@Component）
+- Automatic registration of MessageCodesResolver.定义错误代码生成规则 
+- Automatic use of a ConfigurableWebBindingInitializer bean
+    - 我们可以配置一个ConﬁgurableWebBindingInitializer来替换默认的（添加到容器）
+    - 初始化数据绑定器
+
+#### 7. 如何修改Sping Boot的默认配置
+
+ 我们阅读Spring Boot自动配置的源码，如：org.springframework.boot.autoconﬁgure.web：web的所有自动场景
+ 
+ 我们发现，Spring Boot都会默认注册一些组件供我们使用，但是注入的时候会判断有没有定义这个组件，如果定义则使用你定义的，没有就使用默认的。如下：
+ 
+```
+@Bean
+@ConditionalOnMissingBean
+public HttpMessageConverters messageConverters() {}
+```
+1. Spring Boot在自动配置很多组件的时候，先看容器中有没有用户自己配置的（@Bean），如果没有才自动配置
+2. 如果有些组件有多个，比如视图解析器。用户的配置和默认配置组合起来
+3. 在SpringBoot中会有非常多的xxxConﬁgurer帮助我们进行扩展配置
+4. 在SpringBoot中会有很多的xxxCustomizer帮助我们进行定制配置 
+
+#### 8. 扩展Spring MVC
+
+If you want to keep Spring Boot MVC features, and you just want to add additional MVC configuration (interceptors, formatters, view controllers etc.)you can add your own **@Configuration** class of type **WebMvcConfigurerAdapter**, but **without** @EnableWebMvc.
+
+If you wish to provide custom instances of RequestMappingHandlerMapping, RequestMappingHandlerAdapter or ExceptionHandlerExceptionResolver you can declare a WebMvcRegistrationsAdapter instance providing such components.
+
+
+原本配置Spring MVC：
+
+```
+<mvc:view‐controller path="/hello" view‐name="success"/> 
+<mvc:interceptors>
+  <mvc:interceptor> 
+    <mvc:mapping path="/hello"/> <bean></bean>
+  </mvc:interceptor>
+</mvc:interceptors>
+```
+如果你想添加额外的MVC配置，可以添加一个WebMvcConfigurerAdapter类型的@Configuration配置类，并且不可以添加@EnableWebMvc标记。
+
+自定义配置：
+
+```
+package com.wrq.boot.config;
+
+@Configuration
+public class ConfigController extends WebMvcConfigurerAdapter {
+
+    /**
+     * 访问 http://localhost:8080/helloMan 跳转到success.html
+     * @param registry
+     */
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        registry.addViewController("/helloMan").setViewName("success");
+    }
+}
+```
+原理：
+
+1. WebMvcAutoConﬁguration是SpringMVC的自动配置类
+2. 在做其他自动配置时会导入；@Import(EnableWebMvcConﬁguration.class)
+3. 容器中所有的WebMvcConﬁgurer都会一起起作用
+4. 我们的配置类也会被调用
+ 
+效果：SpringMVC的自动配置和我们的扩展配置都会起作用
+
+#### 9. 完全掌控Spring MVC
+
+If you want to take complete control of Spring MVC, you can add your own @Configuration annotated with @EnableWebMvc.
+```
+package com.wrq.boot.config;
+
+@EnableWebMvc  // 添加此注解将会全面掌控Spring MVC
+@Configuration
+public class ConfigController extends WebMvcConfigurerAdapter {
+
+    /**
+     * 访问 http://localhost:8080/helloMan 跳转到success.html
+     * @param registry
+     */
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        registry.addViewController("/helloMan").setViewName("success");
+    }
+}
+```
+Spring Boot对Spring MVC已经配置好了，我们可以扩展。同样我们可以完全掌控Spring MVC，就如SSM框架开发的时候，我们需要什么功能从头开始配置，Spring Boot的默认配置不会生效。
+
+原理：
+为什么添加@EnableWebMvc就使Spring Boot的配置失效？
+
+
+1. @EnableWebMvc的核心
+
+```
+@Import(DelegatingWebMvcConfiguration.class)
+public @interface EnableWebMvc {
+```
+2. WebMvcConfigurationSupport类
+
+```
+@Configuration public class DelegatingWebMvcConfiguration extends WebMvcConfigurationSupport {
+```
+3. WebMvcAutoConfiguration类
+
+```
+@Configuration
+@ConditionalOnWebApplication @ConditionalOnClass({ Servlet.class, DispatcherServlet.class, WebMvcConfigurerAdapter.class})
+//容器中没有这个组件的时候，这个自动配置类才生效
+@ConditionalOnMissingBean(WebMvcConfigurationSupport.class)
+@AutoConfigureOrder(Ordered.HIGHEST_PRECEDENCE+10)
+@AutoConfigureAfter({DispatcherServletAutoConfiguration.class,
+ValidationAutoConfiguration.class})
+public class WebMvcAutoConfiguration {
+```
+4. @EnableWebMvc将WebMvcConﬁgurationSupport组件导入进来
+5. 导入的WebMvcConﬁgurationSupport只是SpringMVC基本的功能
+
+#### 10. 增删改查Demo
+GitHub项目：boot-web-crud
+
+**1. 引入Bootstrap，jQuery的webjars**
+
+**2. 修改静态资源的路径名，th:href="@{}"**
+- 使用@{}表达式的好处是：全局配置文件添加server.context-path=/project配置后，他会在添加了表达式字符串之前自动加上/project
+
+**3. 国际化的引入**
+- 以前使用Spring MVC
+    - 编写国际化配置文件
+    - 使用ResourcesBundleMessageSource管理国际化资源文件
+    - 在页面使用fmt:message取出国际化内容
+- 现在使用Spring Boot
+    - 编写国际化配置文件(login_zn_CN.properties)，抽取页面需要显示的国际化消息
+    - SpringBoot自动配置好了管理国际化资源文件的组件
+    - 默认采用类路径下message.properties配置文件中的国际化配置
+    - 若采用自己写的配置文件的配置，需要做下方配置后，去页面使用#{}获取配置的值即可。
+
+```
+// resources->i18n->login_en_US.properties(login_zn_CN.properties)
+
+spring.messages.basename=i18n.login // 设置国际化资源文件的基础名（去掉语言国家代码的） 
+```
+使用Spring Boot做国际化管理的时候，Spring Boot自动配置好了管理国际化资源文件的相关组件，此逐渐在类MessageSourceAuoConfiguration中被添加到容器中的，这个组件默认去类路径下message.properties中取配置项，但是在主配置文件中可以通过spring.messages.basename的方式修改默认的位置。
+
+
+**点击 中文->中文，English->英文功能**
+
+原理：
+
+1) 国际化中非常重要的是Locale对象，它是区域信息对象，根据这个对象中的信息来确定是渲染英文还是中文，其中LocaleResolver国际化语言解析器 就是来获得Locale对象的。
+
+2) Sping Boot默认在容器中添加了关于国际化语言解析器的组件
+```
+@Bean
+@ConditionalOnMissingBean
+@ConditionalOnProperty(prefix = "spring.mvc", name = "locale")
+public LocaleResolver localeResolver() {
+	if (this.mvcProperties
+			.getLocaleResolver() == WebMvcProperties.LocaleResolver.FIXED) {
+		return new FixedLocaleResolver(this.mvcProperties.getLocale());
+	}
+	AcceptHeaderLocaleResolver localeResolver = new AcceptHeaderLocaleResolver();
+	localeResolver.setDefaultLocale(this.mvcProperties.getLocale());
+	return localeResolver;
+}
+```
+3) 默认的区域信息解析器：它根据请求头带来的区域信息获取Locale进行国际化。它添加了@ConditionalOnMissingBean组件，只要我们自定义解析器默认就不会生效，使用我们的组件。前提是我们写一个localeResolver，并且把他加入到容器中。
+
+**4. 登陆**
+
+开发期间模板引擎页面修改以后，需要实时生效：
+1) 禁用模板引擎的缓存
+```
+spring.thymeleaf.cache=false
+```
+2) 页面修改完成后Ctrl + F9,重新编译。
+3) 拦截登陆请求
+
+自定义拦截器：
+```
+public class LoginHandlerIntercepter implements HandlerInterceptor {
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        Object username = request.getSession().getAttribute("LoginUser");
+        if(username != null){
+            return true;
+        } else  {
+            request.setAttribute("msg", "没有权限，请登录");
+            request.getRequestDispatcher("/index.html").forward(request,response);
+            return false;
+        }
+    }
+
+    @Override
+    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) throws Exception {
+
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
+
+    }
+}
+
+```
+注册拦截器：
+
+```
+@Configuration
+public class ConfigController extends WebMvcConfigurerAdapter {
+    @Bean
+    public WebMvcConfigurerAdapter webMvcConfigurerAdapter(){
+        WebMvcConfigurerAdapter adapter = new WebMvcConfigurerAdapter(){
+
+    @Override
+    public void addViewControllers(ViewControllerRegistry registry) {
+        registry.addViewController("/index.html").setViewName("login");
+        registry.addViewController("/").setViewName("login");
+        registry.addViewController("/main.html").setViewName("dashboard");
+    }
+
+        @Override
+        public void addInterceptors(InterceptorRegistry registry) {
+            // 静态资源：Spring Boot已经做好了资源映射，我们用管。
+            registry.addInterceptor(new LoginHandlerIntercepter()).addPathPatterns("/**")
+                    .excludePathPatterns("/","/index.html","/user/login");
+        }
+    };
+    return adapter;
+ }
+}
+```
+**5. CRUD-员工列表**
+
+实验要求：
+
+1) RestfulCRUD：CRUD满足Rest风格；
+
+URI： /资源名称/资源标识 HTTP请求方式区分对资源CRUD操作
+
+ 操作| 普通CRUD |  RestfulCRUD
+---|---|---
+查询 |  getEmp | emp---GET
+添加 |  addEmp?xxx | emp---POST
+修改 | updateEmp?id=xxx&xxx=xx| emp/{id}---PUT
+删除 | deleteEmp?id=1| emp/{id}---DELETE
+
+2) 实验的请求架构
+
+
+实验功能 | 请求URI  | 请求方式
+---|---|---
+查询所有员 | emps|  GET
+查询某个员工(来到修改页面)  |  emp/1 |  GET
+来到添加页面  |  emp| GET
+添加员工  |  emp| POSE
+来到修改页面（查出员工进行信息回显）  |  emp/1 | GET
+修改员工  |  emp|PUT
+删除员工  |  emp/1 |DELETE
+3) 员工列表
+
+thymeleaf公共页面元素抽取 
+
+
+```
+1、抽取公共片段 
+<div th:fragment="copy"> 
+  &copy; 2011 The Good Thymes Virtual Grocery 
+</div> 
+
+2、引入公共片段 
+<div th:insert="~{footer :: copy}">
+</div>
+~{templatename::selector}：模板名::选择器 ~{templatename::fragmentname}:模板名::片段名 
+
+3、默认效果： 
+
+insert的公共片段在div标签中 
+
+如果使用th:insert等属性进行引入，可以不用写~{} 
+行内写法可以加上：[[~{}]];[(~{})]；
+```
+三种引入公共片段的th属性：
+
+th:insert：将公共片段整个插入到声明引入的元素中
+
+th:replace：将声明引入的元素替换为公共片段 
+
+th:include：将被引入的片段的内容包含进这个标签中 
+
+
+```
+引入片段：
+<footer th:fragment="copy">
+  &copy; 2011 The Good Thymes Virtual Grocery
+</footer>
+
+引入方式：
+<body>
+  <div th:insert="footer :: copy"></div>
+  <div th:replace="footer :: copy"></div>
+  <div th:include="footer :: copy"></div>
+</body>
+
+引入效果：
+<body>
+  ...
+  <div>
+    <footer>
+      &copy; 2011 The Good Thymes Virtual Grocery
+    </footer>
+  </div>
+
+  <footer>
+    &copy; 2011 The Good Thymes Virtual Grocery
+  </footer>
+
+  <div>
+    &copy; 2011 The Good Thymes Virtual Grocery
+  </div>
+</body>
+```
+CRUD查看boot-web-crud。
+
+#### 11. 错误处理机制
+
+**效果**
+
+当我们访问一个没有的页面就会报404错误，抛出一个丑陋的页面。如果是移动端请求就会返回Json数据。这个错误页面可以定制，不过首先得了解错误处理机制：
+
+之所以浏览器返回的是页面，其他客户端响应的是一个Json数据是因为发送请求的时候，浏览器发送的请求头的 Accept：text/html ，而其他客户端的 accept:"*/*" ,如果出现错误为何就出现这个404页面呢？
+
+**原理：**
+
+可以参照ErrorMvcAutoConﬁguration这个类，错误处理的自动配置。自动给容器中添加了以下组件：
+
+1. ErrorPageCustomizer
+```
+@Value("${error.path:/error}")
+private String path = "/error"; // 系统出现错误发送 /error 请求
+```
+2. BasicErrorController：处理默认/error请求
+```
+@Controller
+@RequestMapping("${server.error.path:${error.path:/error}}")
+public class BasicErrorController extends AbstractErrorController {
+...
+
+@RequestMapping(produces = "text/html") // 浏览器发送的请求到这个方法处理，返回HTML
+	public ModelAndView errorHtml(HttpServletRequest request,
+			HttpServletResponse response) {
+		HttpStatus status = getStatus(request);
+		Map<String, Object> model = Collections.unmodifiableMap(getErrorAttributes(
+				request, isIncludeStackTrace(request, MediaType.TEXT_HTML)));
+		response.setStatus(status.value());
+		ModelAndView modelAndView = resolveErrorView(request, response, status, model);
+		return (modelAndView != null) ? modelAndView : new ModelAndView("error", model);
+	}
+
+	@RequestMapping
+	@ResponseBody // JSON，其他客户端来到这个方法处理
+	public ResponseEntity<Map<String, Object>> error(HttpServletRequest request) {
+		Map<String, Object> body = getErrorAttributes(request,
+				isIncludeStackTrace(request, MediaType.ALL));
+		HttpStatus status = getStatus(request);
+		return new ResponseEntity<Map<String, Object>>(body, status);
+	}
+```
+3. DefaultErrorViewResolver
+```
+private ModelAndView resolve(String viewName, Map<String, Object> model) {
+        //默认SpringBoot可以去找到一个页面？ error/404 
+		String errorViewName = "error/" + viewName;
+		//模板引擎可以解析这个页面地址就用模板引擎解析 
+		TemplateAvailabilityProvider provider = this.templateAvailabilityProviders
+				.getProvider(errorViewName, this.applicationContext);
+		if (provider != null) {
+		//模板引擎可用的情况下返回到errorViewName指定的视图地址 
+			return new ModelAndView(errorViewName, model);
+		}
+		 //模板引擎不可用，就在静态资源文件夹下找errorViewName对应的页面 error/404.html 
+		return resolveResource(errorViewName, model);
+	}
+```
+4. DefaultErrorAttributes：共享页面信息
+
+一旦系统出现了404或者500等错误的时候，ErrorPageCustomizer就会生效，来定制错误的响应规则，这是就相当于请求了 /error 。当发送了/error的请求，这时BasicErrorController就会起作用来处理这个 /error请求。这个BasicErrorControlle会有两种响应的方法,如果是浏览器访问就会返回一个返回html，如果是其他客户端访问就会返回一个Json数据。这样就会响应页面，而去那个页面是DefaultErrorAttributes解析到的，如果模板引擎有 error/4.4.html，就去访问它，如果没有就去找静态资源文件夹下面找errorViewName对应的页面。
+
+#### 12. 定制错误页面
+
+**自定义错误调整页面**
+
+1. 有模板引擎的情况下：error/状态码.html
+
+将错误页面命名为 错误状态码.html 放在模板引擎文件夹里面的error文件夹下，发生此状态码的错误就会来到 对应的页面.
+ 
+我们可以使用4xx和5xx作为错误页面的文件名来匹配这种类型的所有错误，精确优先（优先寻找精确的状态 码.html）
+
+- 页面能获取的信息
+    - timestamp：时间戳
+    - status：状态码
+    - error：错误提示
+    - exception：异常对象
+    - message：异常消息
+    - errors：JSR303数据校验的错误都在这里
+ 
+2. 没有模板引擎（模板引擎找不到这个错误页面），静态资源文件夹下找，无法动态获取值。
+3. 以上都没有错误页面，就是默认来到SpringBoot默认的错误提示页
+
+**自定义返回Json数据**
+
+通过下面的代码实现自定义返回Json数据，不过不仅仅是其他客户端，浏览器返回的也是Json数据。
+```
+@ControllerAdvice
+public class MyExceptionHandler {
+    // 浏览器和其他客户端返回的都是Json
+    @ResponseBody
+    @ExceptionHandler(UserIsNoExist.class) // 自定义异常UserIsNoExist的处理方法
+    public Map<String, Object> handlerException (Exception e) {
+        HashMap<String, Object> map = new HashMap<>();
+        map.put("code", "用户不存在");
+        map.put("message", e.getMessage());
+        return map;
+    }
+}
+```
+
+**转发 /error 实现自适应错误处理**
+
+自适应就是：当出现错误的时候，会自行判断是浏览器还是其他客户端。如果是浏览器则返回404页面，如果是其他客户端则返回Json数据。
+```
+@ControllerAdvice
+public class MyExceptionHandler {
+    /**
+     * 请求 /error  这个时候就会调用Spring Boot默认配置的组件处理
+     */
+    @ExceptionHandler(UserIsNoExist.class)
+    public String  handlerException (Exception e) {
+        HashMap<String, Object> map = new HashMap<>();
+         request.setAttribute("javax.servlet.error.status_code", 500);
+        map.put("code", "用户不存在");
+        map.put("message", e.getMessage());
+        return "forward:/error";
+    }
+}
+```
+出现异常的时候，请求 /error 。当发送了 /error 的请求，这时BasicErrorController就会起作用来处理这个 /error 请求。这个BasicErrorController会有两种响应的方法,如果是浏览器访问就会返回一个返回html，如果是其他客户端访问就会返回一个Json数据。
+
+我们在template/error文件夹定义了4xx和5xx的处理页面，Spring Boot默认配置的BasicErrorController同样也是对状态码为4xx和5xx的才会处理。但是我们自定义的UserIsNoExist异常，状态码是：200，所以在处理异常的时候需要设置成：4xx或者5xx。只有这样才会进入错误页面的解析流程，会通过DefaultErrorAttributes进行解析，它会返回一个map，而这个map就是页面和Json能获取的所有字段。
+
+
+**将定制的数据携带出去**
+
+当发送了 /error 的请求，这时BasicErrorController就会起作用来处理这个 /error 请求。这个BasicErrorController会有两种响应的方法,如果是浏览器访问就会返回一个返回html，如果是其他客户端访问就会返回一个Json数据。响应出去可以获取的数据是由getErrorAttributes得到的，getErrorAttributes是AbstractErrorController（ErrorController）规定的方法。
+
+如果想实现将定制的数据携带出去，方法有两个：
+1. 完全来编写一个ErrorController的实现类[或者是编写AbstractErrorController的子类]，放在容器中
+2. 页面上能用的数据，或者是json返回能用的数据都是通过errorAttributes.getErrorAttributes得到,容器中DefaultErrorAttributes.getErrorAttributes()默认进行数据处理的。
+自定义ErrorAttributes。
+
+```
+@ControllerAdvice
+public class MyExceptionHandler {
+    @ExceptionHandler(UserIsNoExist.class)
+    public String  handlerException (Exception e, HttpServletRequest request) {
+        HashMap<String, Object> map = new HashMap<>();
+        /**
+         * 必须自定义状态码，如何不自定义无法跳转到我们自己创建的5xx和4xx的错误页面
+         */
+        request.setAttribute("javax.servlet.error.status_code", 500);
+        map.put("code", "用户不存在");
+        map.put("message", e.getMessage());
+        // 把自定义的map放到request域里面，然后再去请求 /error ，接下来会去DefaultErrorAttributes
+        request.setAttribute("ext", map);
+        return "forward:/error";
+    }
+}
+```
+
+补充阅读：[转发和重定向的区别](https://www.cnblogs.com/Qian123/p/5345527.html)
+
+```
+@Component
+public class MyErrorAttributes  extends DefaultErrorAttributes{
+
+    // 返回值的map就是页面和json能获取所有的字段
+    @Override
+    public Map<String, Object> getErrorAttributes(RequestAttributes requestAttributes, boolean includeStackTrace) {
+
+        Map<String, Object> map =  super.getErrorAttributes(requestAttributes, includeStackTrace);
+        Map<String, Object> ext = (Map<String, Object>)
+        // 刚刚传递过来的值 
+        requestAttributes.getAttribute("ext", 0);
+        map.put("ext", ext);
+        return map;
+    }
+}
+```
+最终的效果：响应是自适应的，可以通过定制ErrorAttributes改变需要返回的内容。
+
+自定义一个异常拦截器，拦截指定异常后把自定义的信息放在request中，这时候在重定向 /error ，然后通过BasicErrorController进行两种响应，紧接着通过DefaultErrorAttributes进行处理，他有一个方法getErrorAttributes，这个方法返回的map就是页面和Json能获取的所有字段。所有我们自定义DefaultErrorAttributes，来获取request中放的数据，放到map中返回。
+
+
+
+
+
 
 参考文献：
 
