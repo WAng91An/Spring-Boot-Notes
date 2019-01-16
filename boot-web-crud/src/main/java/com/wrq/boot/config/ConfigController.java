@@ -25,7 +25,6 @@ public class ConfigController extends WebMvcConfigurerAdapter {
         registry.addViewController("/helloMan").setViewName("success");
     }
 
-
     /**
      * 通过WebMvcConfigurerAdapter来自定义配置，所有的组件一起起作用，但是必须让Spring Boot知道这个组件
      * @return adapter
