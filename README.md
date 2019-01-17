@@ -1993,11 +1993,707 @@ public class ServletInitializer extends SpringBootServletInitializer {
 [视频教程](https://www.bilibili.com/video/av39001751/?p=52)
 
 
+## 五、Docker
+
+#### 1. 什么是Docker？
+
+Docker是一个开源的应用容器引擎，基于Go语言并遵从Apache2.0协议开源。Docker可以让开发者打包他们的应用以及依赖包到一个轻量级、可移植的容器中， 然后发布到任何流行的 Linux 机器上，也可以实现虚拟化。 
+
+容器是完全使用沙箱机制，相互之间不会有任何接口,更重要的是容器性能开销极低。Docker支持将软件编译成一个镜像。然后 在镜像中各种软件做好配置，将镜像发布出去，其他使用者可以直接使用这个镜像。
+
+如何理解呢，我们举个例子：
+
+相信在刚刚接触JaveWeb的时候，都做过单体应用。而在Linux服务器部署一个单体JavaWeb应用，一般会在服务器安装Tomcat、MySql、Redis、JDK等相关环境或软件，安装完软件之后需要进行相关配置，最后把项目打成War包，放在服务器进行部署。这样有几个缺点，那就是面对黑糊糊的命令行，如果想部署成功需要一定的Linux知识储备，再者就是如果我们想在另一台服务器上部署，也需要重复刚刚的下载软件、配置环境、部署，极为繁琐。而Docker作为一门容器技术，很好的解决这一问题。
+
+我们只需要在一台Linux机器上完成软件的安装和配置，然后把他们做成镜像，MySQL做成MySQL-Docker镜像，Tomcat做成Tomcat-Docker镜像。当我们在另一台Linux服务器安装的时候只需要安装Docker这个软件，然后把镜像拿过来运行即可，这个镜像就成了一个容器。容器启动是非常快速的。类似windows里面的ghost操作系统，安装好后什么都有了，这样就降低了对linux操作的难度。
+
+
+
+#### 2. Docker的核心概念
+
+- docker镜像(Images)：Docker 镜像是用于创建Docker 容器的 模板。 
+- docker容器(Container)：容器是独立运行的一个或一组应用。
+- docker客户端(Client)：客户端通过命令行或者其他工具使用 [Docker API](https://docs.docker.com/reference/api/docker_remote_api) 与Docker 的守护进程通信
+- docker主机(Host)：一个物理或者虚拟的机器用于执行 Docker 守护进程和容器
+- docker仓库(Registry)：Docker 仓库用来保存镜像，可以理解 为代码控制中的代码仓库，Docker Hub(https://hub.docker.com) 提供了庞大的镜像集合供使用
+
+
+#### 3. Docker的使用
+
+安装Linux虚拟机：[VirtualBox官方下载](https://www.virtualbox.org/wiki/Downloads)
+
+
+## 六、数据访问
+
+#### 1. 简介
+
+对于数据访问层，无论是SQL还是NOSQL，Spring Boot默认采用整合 Spring Data的方式进行统一处理，添加大量自动配置，屏蔽了很多设置。引入 各种xxxTemplate，xxxRepository来简化我们对数据访问层的操作。对我们来 说只需要进行简单的设置即可。 
+- JDBC 
+- MyBatis 
+- JPA
+
+#### 2. JDBC
+1. 初始化项目，导入数据访问依赖
+```
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-jdbc</artifactId>
+</dependency>
+<dependency>
+	<groupId>mysql</groupId>
+	<artifactId>mysql-connector-java</artifactId>
+	<scope>runtime</scope>
+</dependency>
+```
+2. 编写配置
+```
+spring:
+  datasource:
+    username: root
+    password: admin
+    url: jdbc:mysql://localhost:3306/jdbc?characterEncoding=utf-8
+    driver-class-name: com.mysql.jdbc.Driver
+```
+3. JDBC默认采用 org.apache.tomcat.jdbc.pool.DataSource 数据源，数据源的相关配置参考：DataSourceProperties。
+
+##### 原理
+参考：org.springframework.boot.autoconﬁgure.jdbc
+- 参考DataSourceConﬁguration，根据配置创建数据源，默认使用Tomcat连接池；可以使用 spring.datasource.type指定自定义的数据源类型；
+- SpringBoot默认可以支持：
+    - org.apache.tomcat.jdbc.pool.DataSource
+    - HikariDataSource
+    - BasicDataSource
+- 下面代码表明我们可以自定义数据源类型
+```
+/**
+* Generic DataSource configuration.
+*/
+@ConditionalOnMissingBean(DataSource.class)
+@ConditionalOnProperty(name = "spring.datasource.type")
+static class Generic {
+
+    // 使用DataSourceBuilder创建数据源，利用反射创建相关的数据源，并绑定相关属性。
+	@Bean
+	public DataSource dataSource(DataSourceProperties properties) {
+		return properties.initializeDataSourceBuilder().build();
+	}
+}
+```
+##### 自动执行建表语句
+
+DataSourceInitializer：ApplicationListener
+ 
+作用：
+1. runSchemaScripts() 运行建表语句
+2. runDataScripts() 运行插入数据的sql语句
+默认只需要将文件命名为：
+
+```
+schema‐*.sql、data‐*.sql 
+
+1. 默认规则：schema.sql，schema‐all.sql，放在类路径下，启动就会执行文件中的语句
+
+2. 在yml中可以使用下面配置指定位置
+schema:
+    ‐ classpath:department.sql
+```
+##### 操作数据库
+
+操作数据库：自动配置了JdbcTemplate操作数据库 
+
+在JdbcTemplateAutoConfigration中：
+
+```
+@Bean // /容器中注入了 JdbcTemplate 的bean
+@Primary
+@ConditionalOnMissingBean(JdbcOperations.class)
+public JdbcTemplate jdbcTemplate() {
+	return new JdbcTemplate(this.dataSource);
+}
+```
+由于Spring Boot自动配置了JdbcTemplate，我们可以从容器中拿来使用：
+```
+@Controller
+public class HelloController {
+
+    @Autowired
+    JdbcTemplate jdbcTemplate;
+
+    @ResponseBody
+    @RequestMapping("/hello")
+    public List hello () {
+        List<Map<String, Object>> maps = jdbcTemplate.queryForList("select * from department");
+        return  maps;
+    }
+}
+```
+#### 3. 配置数据源
+
+默认采用 org.apache.tomcat.jdbc.pool.DataSource ，但是实际开发中很少使用这个数据源。
+
+整合**Druid**数据源：
+
+1. 导入依赖
+```
+<!-- https://mvnrepository.com/artifact/com.alibaba/druid -->
+<dependency>
+    <groupId>com.alibaba</groupId>
+    <artifactId>druid</artifactId>
+    <version>1.1.10</version>
+</dependency>
+```
+2. 修改配置
+```
+spring:
+  datasource:
+    username: root
+    password: admin
+    url: jdbc:mysql://localhost:3306/jdbc?characterEncoding=utf-8
+    driver-class-name: com.mysql.jdbc.Driver
+    type: com.alibaba.druid.pool.DruidDataSource
+#   下面的配置如果想生效需要自己配置
+    initialSize: 5
+    minIdle: 5
+    maxActive: 20
+    maxWait: 60000
+    timeBetweenEvictionRunsMillis: 60000
+    minEvictableIdleTimeMillis: 300000
+    validationQuery: SELECT 1 FROM DUAL
+    testWhileIdle: true
+    testOnBorrow: false
+    testOnReturn: false
+    poolPreparedStatements: true
+```
+我们需要配置 type： com.alibaba.druid.pool.DruidDataSource 来切换数据源，但是我们下面在配置文件中的配置是不会生效的。
+```
+initialSize: 5
+minIdle: 5
+maxActive: 20
+maxWait: 60000
+timeBetweenEvictionRunsMillis: 60000
+minEvictableIdleTimeMillis: 300000
+validationQuery: SELECT 1 FROM DUAL
+testWhileIdle: true
+testOnBorrow: false
+testOnReturn: false
+poolPreparedStatements: true
+```
+是因为username、password属性和DatasourceProperties中的属性进行绑定了，但是initialSize、minIdle等属性没法与DatasourceProperties中的属性绑定，它需要和DruidDataSource进行绑定。
+
+我们需要自定义一个Druid数据源来进行绑定：
+
+```
+@Configuration
+public class Config {
+
+    // 把配置文件中spring.datasource.initialSize等属性和DruidDataSource中属性进行绑定
+    @ConfigurationProperties(prefix = "spring.datasource")
+    @Bean
+    public DruidDataSource druidDataSource () {
+        return new DruidDataSource();
+    }
+}
+```
+3. 配置Druid监控、过滤器
+
+```
+@Configuration
+public class DruidConfig {
+
+    /**
+     * spring.datasource中的配置和DruidDataSource中的属性绑定
+     * @return
+     */
+    @ConfigurationProperties(prefix = "spring.datasource")
+    @Bean
+    public DruidDataSource druidDataSource () {
+        return new DruidDataSource();
+    }
+
+    /**
+     * 配置Druid的监控 
+     * 1、配置一个管理后台的Servlet，拦截登陆
+     * @return
+     */
+    @Bean
+    public ServletRegistrationBean statViewServlet(){
+        ServletRegistrationBean servletRegistrationBean = new ServletRegistrationBean(new StatViewServlet(),"/druid/*");
+        Map<String,String> initParams = new HashMap<>();
+        initParams.put("loginUsername","admin");
+        initParams.put("loginPassword","123456");
+        initParams.put("allow",""); // 允许所有访问
+        servletRegistrationBean.setInitParameters(initParams);
+        return servletRegistrationBean;
+    }
+
+    // 配置一个web监控的filter，哪些请求会被监控，哪些排除。
+    @Bean
+    public FilterRegistrationBean webStatFilter() {
+        FilterRegistrationBean bean = new FilterRegistrationBean(new WebStatFilter());
+        Map<String,String> initParams = new HashMap<>();
+        initParams.put("exclusions","*.js,*.css,/druid/*");
+        bean.setInitParameters(initParams);
+        bean.setUrlPatterns(Arrays.asList("/*"));
+        return bean;
+    }
+}
+```
+当我们访问：http://localhost:8080/druid 就会进入监控页面，可以查看执行哪些SQL，已经时间等性能。
+
+#### 4. 整合MyBatis-注解版
+
+1. 导入依赖,mybatis-spring-boot-starter是MyBatis官方提供的。
+
+```
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-jdbc</artifactId>
+</dependency>
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+<dependency>
+	<groupId>org.mybatis.spring.boot</groupId>
+	<artifactId>mybatis-spring-boot-starter</artifactId>
+	<version>1.3.2</version>
+</dependency>
+
+<dependency>
+	<groupId>mysql</groupId>
+	<artifactId>mysql-connector-java</artifactId>
+	<scope>runtime</scope>
+</dependency>
+```
+2. 配置Druid数据源
+```
+<!-- https://mvnrepository.com/artifact/com.alibaba/druid -->
+<dependency>
+    <groupId>com.alibaba</groupId>
+    <artifactId>druid</artifactId>
+    <version>1.1.10</version>
+</dependency>
+```
+3. 编写数据源配置
+```
+spring:
+  datasource:
+#   数据源基本配置
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/mybatis
+    type: com.alibaba.druid.pool.DruidDataSource
+#   数据源其他配置
+    initialSize: 5
+    minIdle: 5
+    maxActive: 20
+    maxWait: 60000
+    timeBetweenEvictionRunsMillis: 60000
+    minEvictableIdleTimeMillis: 300000
+    validationQuery: SELECT 1 FROM DUAL
+    testWhileIdle: true
+    testOnBorrow: false
+    testOnReturn: false
+    poolPreparedStatements: true
+#   配置监控统计拦截的filters，去掉后监控界面sql无法统计，'wall'用于防火墙
+    filters: stat,wall,log4j
+    maxPoolPreparedStatementPerConnectionSize: 20
+    useGlobalDataSourceStat: true
+    connectionProperties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=500
+```
+
+4. Druid监控以及属性绑定 
+```
+@Configuration
+public class DruidConfig {
+
+    /**
+     * spring.datasource中的配置和DruidDataSource中的属性绑定
+     * @return
+     */
+    @ConfigurationProperties(prefix = "spring.datasource")
+    @Bean
+    public DruidDataSource druidDataSource () {
+        return new DruidDataSource();
+    }
+
+    /**
+     * 配置Druid的监控
+     * 1、配置一个管理后台的Servlet，拦截登陆
+     * @return
+     */
+    @Bean
+    public ServletRegistrationBean statViewServlet(){
+        ServletRegistrationBean servletRegistrationBean = new ServletRegistrationBean(new StatViewServlet(),"/druid/*");
+        Map<String,String> initParams = new HashMap<>();
+        initParams.put("loginUsername","admin");
+        initParams.put("loginPassword","123456");
+        initParams.put("allow",""); // 允许所有访问
+        servletRegistrationBean.setInitParameters(initParams);
+        return servletRegistrationBean;
+    }
+
+    // 配置一个web监控的filter，哪些请求会被监控，哪些排除。
+    @Bean
+    public FilterRegistrationBean webStatFilter() {
+        FilterRegistrationBean bean = new FilterRegistrationBean(new WebStatFilter());
+        Map<String,String> initParams = new HashMap<>();
+        initParams.put("exclusions","*.js,*.css,/druid/*");
+        bean.setInitParameters(initParams);
+        bean.setUrlPatterns(Arrays.asList("/*"));
+        return bean;
+    }
+}
+```
+5. 编写Bean
+```
+public class Department {
+    private Integer id;
+    private String departmentName;
+    // getter、setter方法已经省略
+}
+
+```
+6. 编写Mapper接口
+@Mapper注解是必须的，如果我们的Mapper特别的，每个都加太麻烦，可以在**主程序类**上面加上注解@MapperScan(value = "com.xxxx")扫描即可。
+```
+@Mapper
+public interface DepartmentMapper {
+
+    @Select("select * from department where id=#{id}")
+    public Department getDeptById(Integer id);
+
+    @Delete("delete from department where id=#{id}")
+    public int deleteDeptById(Integer id);
+
+    /**
+     * Options注解：当插入一条数据后生成id，这个新生成的id会再次封装进来。
+     * 加了Options注解，把插入的数据再返回的时候会把刚刚生成的id封装进去
+     * @param department
+     * @return
+     */
+    @Options(useGeneratedKeys = true,keyProperty = "id")
+    @Insert("insert into department(departmentName) values(#{departmentName})")
+    public int insertDept(Department department);
+
+    @Update("update department set departmentName=#{departmentName} where id=#{id}")
+    public int updateDept(Department department);
+}
+```
+7. 编写Controller
+```
+@Controller
+public class DepartmentController {
+
+    @Autowired
+    private DepartmentMapper departmentMapper;
+
+    @ResponseBody
+    @RequestMapping(value = "/dept/{id}",method = RequestMethod.GET)
+    public Department getDepartment(@PathVariable("id") Integer id){
+        return departmentMapper.getDeptById(id);
+    }
+
+    /**
+     * mapper中不添加Options注解，返回的json的id为空，加了Options注解，把插入的数据再返回的时候会把刚刚生成的id封装进去
+     * @param department
+     * @return
+     */
+    @ResponseBody
+    @RequestMapping(value = "/dept", method = RequestMethod.GET)
+    public Department insertDepartment(Department department){
+        departmentMapper.insertDept(department);
+        return department;
+    }
+}
+```
+8. 开启驼峰命名，自定义配置
+
+若数据库的自动为：department_name,我们的Bean中定义的属性为departmentName。按照以前需要开启驼峰命名法的配置，使用Sping Boot自定义MyBatis的配置：
+```
+@org.springframework.context.annotation.Configuration
+public class MyBatisConfig {
+
+    @Bean
+    public ConfigurationCustomizer configurationCustomizer(){
+        return new ConfigurationCustomizer() {
+            @Override
+            public void customize(Configuration configuration) {
+                // 开启驼峰命名
+                configuration.setMapUnderscoreToCamelCase(true);
+            }
+        };
+    }
+}
+```
+#### 4. 整合MyBatis-配置版
+
+1. 导入依赖,mybatis-spring-boot-starter是MyBatis官方提供的。
+
+```
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-jdbc</artifactId>
+</dependency>
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+<dependency>
+	<groupId>org.mybatis.spring.boot</groupId>
+	<artifactId>mybatis-spring-boot-starter</artifactId>
+	<version>1.3.2</version>
+</dependency>
+
+<dependency>
+	<groupId>mysql</groupId>
+	<artifactId>mysql-connector-java</artifactId>
+	<scope>runtime</scope>
+</dependency>
+```
+2. 配置Druid数据源
+```
+<!-- https://mvnrepository.com/artifact/com.alibaba/druid -->
+<dependency>
+    <groupId>com.alibaba</groupId>
+    <artifactId>druid</artifactId>
+    <version>1.1.10</version>
+</dependency>
+```
+3. 编写数据源配置
+```
+spring:
+  datasource:
+#   数据源基本配置
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/mybatis
+    type: com.alibaba.druid.pool.DruidDataSource
+#   数据源其他配置
+    initialSize: 5
+    minIdle: 5
+    maxActive: 20
+    maxWait: 60000
+    timeBetweenEvictionRunsMillis: 60000
+    minEvictableIdleTimeMillis: 300000
+    validationQuery: SELECT 1 FROM DUAL
+    testWhileIdle: true
+    testOnBorrow: false
+    testOnReturn: false
+    poolPreparedStatements: true
+#   配置监控统计拦截的filters，去掉后监控界面sql无法统计，'wall'用于防火墙
+    filters: stat,wall,log4j
+    maxPoolPreparedStatementPerConnectionSize: 20
+    useGlobalDataSourceStat: true
+    connectionProperties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=500
+```
+
+4. Druid监控以及属性绑定 
+```
+@Configuration
+public class DruidConfig {
+
+    /**
+     * spring.datasource中的配置和DruidDataSource中的属性绑定
+     * @return
+     */
+    @ConfigurationProperties(prefix = "spring.datasource")
+    @Bean
+    public DruidDataSource druidDataSource () {
+        return new DruidDataSource();
+    }
+
+    /**
+     * 配置Druid的监控
+     * 1、配置一个管理后台的Servlet，拦截登陆
+     * @return
+     */
+    @Bean
+    public ServletRegistrationBean statViewServlet(){
+        ServletRegistrationBean servletRegistrationBean = new ServletRegistrationBean(new StatViewServlet(),"/druid/*");
+        Map<String,String> initParams = new HashMap<>();
+        initParams.put("loginUsername","admin");
+        initParams.put("loginPassword","123456");
+        initParams.put("allow",""); // 允许所有访问
+        servletRegistrationBean.setInitParameters(initParams);
+        return servletRegistrationBean;
+    }
+
+    // 配置一个web监控的filter，哪些请求会被监控，哪些排除。
+    @Bean
+    public FilterRegistrationBean webStatFilter() {
+        FilterRegistrationBean bean = new FilterRegistrationBean(new WebStatFilter());
+        Map<String,String> initParams = new HashMap<>();
+        initParams.put("exclusions","*.js,*.css,/druid/*");
+        bean.setInitParameters(initParams);
+        bean.setUrlPatterns(Arrays.asList("/*"));
+        return bean;
+    }
+}
+```
+5. 编写Bean
+```
+package com.wrq.boot.bean;
+public class Employee {
+    private Integer id;
+    private String lastName;
+    private Integer gender;
+    private String email;
+    private Integer dId;
+    ...
+}
+```
+6. 编写mapper
+```
+@Mapper
+public interface EmployeeMapper {
+
+    public Employee getEmpById(Integer id);
+
+    public void insertEmp(Employee employee);
+}
+```
+7. 主配值文件:resources->mybatis->mybatis-config.xml
+```
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE configuration
+        PUBLIC "-//mybatis.org//DTD Config 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-config.dtd">
+<configuration>
+
+    <settings>
+        <setting name="mapUnderscoreToCamelCase" value="true"/>
+    </settings>
+</configuration>
+```
+8. mapper配置文件:resources->mybatis->mapper->*.xml
+```
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wrq.boot.mapper.EmployeeMapper">
+    <select id="getEmpById" resultType="com.wrq.boot.bean.Employee">
+      SELECT * FROM employee WHERE id=#{id}
+    </select>
+
+    <insert id="insertEmp" >
+        INSERT INTO employee(lastName,email,gender,d_id) VALUES (#{lastName},#{email},#{gender},#{dId})
+    </insert>
+</mapper>
+```
+9. 主配置文件添加以下配置
+```
+mybatis:
+  config-location: classpath:mybatis/mybatis-config.xml
+  mapper-locations: classpath:mybatis/mapper/*.xml
+```
+10. 编写Controller
+```
+@RestController
+public class EmployeeController {
+
+    @Autowired
+    private EmployeeMapper employeeMapper;
+
+    @GetMapping("/emp/{id}")
+    public Employee getEmployee(@PathVariable("id") Integer id){
+        return employeeMapper.getEmpById(id);
+    }
+}
+```
+#### 4. 整合JPA
+1. 导入依赖
+```
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-data-jpa</artifactId>
+</dependency>
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-jdbc</artifactId>
+</dependency>
+<dependency>
+	<groupId>org.springframework.boot</groupId>
+	<artifactId>spring-boot-starter-web</artifactId>
+</dependency>
+
+<dependency>
+	<groupId>mysql</groupId>
+	<artifactId>mysql-connector-java</artifactId>
+	<scope>runtime</scope>
+</dependency>
+```
+2. 编写配置文件
+```
+spring:
+  datasource:
+    username: root
+    password: admin
+    url: jdbc:mysql://localhost:3306/jpa?characterEncoding=utf-8
+    driver-class-name: com.mysql.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+```
+3. 编写实体类
+```
+//使用JPA注解配置映射关系
+@Entity //告诉JPA这是一个实体类（和数据表映射的类）
+@Table(name = "tbl_user") //@Table来指定和哪个数据表对应;如果省略默认表名就是user；
+public class User {
+
+    @Id //这是一个主键
+    @GeneratedValue(strategy = GenerationType.IDENTITY)//自增主键
+    private Integer id;
+
+    @Column(name = "last_name", length = 50) //这是和数据表对应的一个列
+    private String lastName;
+    @Column //省略默认列名就是属性名
+    private String email;
+    ...
+}
+```
+4. 编写repository
+```
+package com.wrq.boot.repository;
+
+public interface UserRepository extends JpaRepository<User,Integer> {
+}
+```
+5. 编写controller
+```
+package com.wrq.boot.controller;
+@RestController
+public class UserController {
+
+    @Autowired
+    UserRepository repository;
+
+    @GetMapping("/user/{id}")
+    public User getUser (@PathVariable("id") Integer id){
+        User one = repository.findOne(id);
+        return one;
+    }
+
+    @GetMapping("/user")
+    public User insertUser(User user){
+        User save = repository.save(user);
+        return save;
+    }
+}
+```
+
 
 
 
 参考文献：
 
+[尚硅谷Spring Boot视频](http://www.gulixueyuan.com/)
+
 [注解机制及其原理](https://blog.csdn.net/wangyangzhizhou/article/details/51698638)
 
-[springboot快速入门及@SpringBootApplication注解分析](https://www.jianshu.com/p/4e1cab2d8431)
+[@SpringBootApplication注解分析](https://www.jianshu.com/p/4e1cab2d8431)
